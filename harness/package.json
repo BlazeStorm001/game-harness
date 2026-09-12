@@ -1,0 +1,14 @@
+{
+  "name": "neon-breach-eval-harness",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@playwright/mcp": "0.0.79",
+    "@playwright/test": "1.62.1"
+  }
+}

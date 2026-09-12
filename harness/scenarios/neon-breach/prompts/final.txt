@@ -1,0 +1,1 @@
+Use this as the final release pass for NEON BREACH. Play the current game as a new user, fix the most important broken or unfinished behavior and presentation you observe, verify the production build and browser experience, and leave clear run instructions. Be honest about anything that remains incomplete.

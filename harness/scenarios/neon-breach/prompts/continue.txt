@@ -1,0 +1,3 @@
+Continue developing NEON BREACH autonomously. Inspect the repository and the actual running game before deciding what to do. Choose the most important weakness preventing it from feeling like a polished, complete properly coded game, implement the improvement, test it in the browser, and fix problems you discover with respect to game or code. Do not merely review or report, and do not stop just because a basic playable version exists. Implement different types of test cases to test the game fully.
+
+Use the `game_test` tool to exercise the running game through multiple action-state transitions and fix failures it reports.

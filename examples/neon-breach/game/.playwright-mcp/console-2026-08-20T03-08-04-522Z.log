@@ -1,0 +1,7 @@
+[   39400ms] TypeError: Assignment to constant variable.
+    at dda (http://localhost:8017/js/pathfind.js:103:37)
+    at canSee (http://localhost:8017/js/entities.js:292:8)
+    at Guard.update (http://localhost:8017/js/entities.js:348:15)
+    at Game.update (http://localhost:8017/js/game.js:110:36)
+    at frame (http://localhost:8017/js/main.js:34:8)
+[   39490ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8017/favicon.ico:0

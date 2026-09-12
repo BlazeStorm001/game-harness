@@ -1,0 +1,31 @@
+{
+  "settings": {
+    "toolPrefix": "mcp",
+    "requestTimeoutMs": 120000,
+    "maxRetries": 5
+  },
+  "mcpServers": {
+    "playwright": {
+      "transport": "stdio",
+      "command": "/usr/bin/env",
+      "args": [
+        "bash",
+        "-lc",
+        "exec \"$AGENT_EVAL_HARNESS_DIR/scripts/playwright-mcp.sh\""
+      ],
+      "lifecycle": "eager",
+      "requestTimeoutMs": 180000
+    },
+    "context7": {
+      "transport": "stdio",
+      "command": "/usr/bin/env",
+      "args": [
+        "bash",
+        "-lc",
+        "exec npx -y @upstash/context7-mcp --api-key \"$CONTEXT7_API_KEY\""
+      ],
+      "lifecycle": "eager",
+      "requestTimeoutMs": 120000
+    }
+  }
+}

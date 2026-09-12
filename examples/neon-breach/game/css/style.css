@@ -1,0 +1,21 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #020409;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#stage {
+  position: relative;
+  line-height: 0;
+}
+#game {
+  image-rendering: pixelated;
+  border: 1px solid #10203a;
+  box-shadow: 0 0 60px rgba(33, 230, 255, 0.08), inset 0 0 120px rgba(0, 0, 0, 0.4);
+}
