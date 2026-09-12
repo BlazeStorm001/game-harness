@@ -10,7 +10,11 @@ experiments, and autonomous test bots.
 
 [Play NEON BREACH](https://blazestorm001.github.io/game-harness/)
 
-[Watch the NEON BREACH demo](examples/neon-breach/neon-breach-demo.mp4)
+
+
+https://github.com/user-attachments/assets/b2d166ed-fc4b-4002-84df-28616f8f2507
+
+
 
 - [Experiment Results](examples/neon-breach/README.md)
 - [Sanitized agent trace](https://blazestorm001.github.io/game-harness/traces.html)
