@@ -8,6 +8,8 @@ and autonomous play bots.
   root-level screenshots under their original filenames.
 - [`game/.playwright-mcp/`](game/.playwright-mcp/) contains the main session's
   browser artifacts: scripts, bots, console captures, page snapshots, and images.
+- [`scenario/`](scenario/) preserves the prompts and reference
+  images associated with the main experiment, independently of the active harness scenario.
 - [`artifacts.sha256`](artifacts.sha256) verifies the preserved output.
 
 Run the game locally:

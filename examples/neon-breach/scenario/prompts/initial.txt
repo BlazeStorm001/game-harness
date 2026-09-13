@@ -1,0 +1,7 @@
+Create NEON BREACH end to end: an original, polished cyberpunk browser game about infiltrating a neon facility, stealing valuable data, and escaping.
+
+Use the attached reference images as visual inspiration. The final result should look and feel like a complete small game, not a technical demo.
+
+You have access to the repository, shell, network, library documentation, image-generation tool and a headless browser. Choose the technology, architecture, mechanics, scope, art approach, and testing strategy yourself.
+
+Work autonomously: build the game, run it, play and inspect it in the browser, diagnose problems, fix them, and keep improving it. Do not ask me questions. Before finishing, make sure another person can install, run, understand, and play what you created.
