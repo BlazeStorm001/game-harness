@@ -1,70 +1,53 @@
 # NEON BREACH Case Study
 
-NEON BREACH is the preserved output of the Qwen3.8-27B evaluation. Qwen created
-a game, procedural pixel art, production tests, exploratory Playwright scripts,
-and autonomous play bots.
+This is the preserved output of a nine-hour Qwen3.8-27B (3-bit quantized) evaluation run. Qwen created the game, procedural pixel art, automated tests, browser experiments, and captured screenshots.
 
-- [`game/`](game/) is the complete game snapshot, including Qwen's historical
-  root-level screenshots under their original filenames.
-- [`game/.playwright-mcp/`](game/.playwright-mcp/) contains the main session's
-  browser artifacts: scripts, bots, console captures, page snapshots, and images.
-- [`scenario/`](scenario/) preserves the prompts and reference
-  images associated with the main experiment, independently of the active harness scenario.
-- [`artifacts.sha256`](artifacts.sha256) verifies the preserved output.
+- [`game/`](game/) is the unchanged project produced during the run.
+- [`scenario/`](scenario/) contains the supplied prompts and reference images.
+- [`artifacts.sha256`](artifacts.sha256) verifies every preserved game file.
+- [`traces.html`](traces.html) is the complete interactive Pi session export.
 
 Run the game locally:
 
 ```bash
 cd examples/neon-breach/game
-npm start
-```
+python3 -m http.server 8123```
 
-Open <http://localhost:8000>. The Qwen-authored [game README](game/README.md)
-contains controls and implementation details.
+Open <http://127.0.0.1:8123>
 
-## Run Findings
+## Run Summary
 
-One main Pi session continued across 3 overnight harness launches; later
-launches used `--resume-latest`. Three `final` event logs are nightly validation
-checkpoints in that continuing session.
+The run used one Pi session that lasted nine hours. It contained one initial turn, seven continuation turns, and one final-validation turn. The initial prompt supplied the generic `game_test` interface alongside Playwright MCP;
+Qwen implemented the required deterministic `window.__gameTest` contract in the production game.
 
-Qwen initially attempted browser verification through Playwright MCP. When
-compact, reliable game-state testing remained difficult, we added the generic
-`game_test` extension and a stronger contract prompt. Qwen then implemented
-`window.__gameTest` against production game logic and created richer tests and autonomous bots.
-
-The logs contain 67 deduplicated `game_test` calls and no `generate_image`
-calls. The optional Cloudflare image tool was available, but Qwen chose
-procedural JavaScript sprite maps.
+Qwen did not call the optional `generate_image` tool. It generated the game's art procedurally in JavaScript and used browser screenshots while testing.
 
 ## Run Configuration
 
-- Model: Unsloth Qwen3.8-27B `UD-Q3_K_XL` GGUF with F16 mmproj
-- Hardware: NVIDIA RTX 5060 Ti, 16 GB VRAM, NVIDIA T400 4 GB VRAM (for mmproj)
-- Context: 50,176 tokens
+The llama.cpp server used an ASCII-condensed Qwen3.8-27B `UD-Q3_K_XL` target
+with a compatible ASCII-condensed DFlash2 `Q2_K` draft exported using the same
+token mapping. It ran with an 86,000-token context, Q4 target and draft KV
+caches, and DFlash proposals of up to four tokens. The target and draft ran on
+an RTX 5060 Ti; the F16 multimodal projector ran on a T400.
 
-## Summary
 
 | Measure | Count | Method |
 | --- | ---: | --- |
-| Qwen-created source and configuration | about 4,900 lines | 4,912 lines across preserved code, tests, bots, scripts, markup, styles, and package configuration |
-| Input context tokens | about 54.4 million | 8,522,737 uncached input tokens plus 45,877,758 cache-read tokens |
-| Output tokens | about 1.0 million | 1,002,728 provider-reported tokens |
-| Deduplicated saved-session tool calls | 1,178 | Unique tool-call IDs in the session |
-| `game_test` tool calls | 67 | Unique tool-call IDs |
-| Browser automation calls | 261 | Unique Playwright MCP tool-call IDs |
-| Browser screenshots requested | 22 | Unique `mcp_playwright_browser_take_screenshot` calls |
-| Historical screenshots retained | 27 | Screenshot files in the preserved game snapshot |
-
-Token totals are exact sums of the usage recorded for 1,322 completed model
-responses. They exclude 34 context-limit rejections and two connection errors;
-those records report zero usage. The decode speed was around 25 tokens per second on average with VRAM consumption hovering around 15.3 GB.
+| Qwen-created game and test code | 3,137 lines | HTML, JavaScript, and `.mjs` files in `game/` |
+| Provider-reported input context | 46,346,032 tokens | Uncached input plus cache-read tokens |
+| Provider-reported output | 618,034 tokens | Sum across saved assistant records |
+| Tool calls | 749 | Unique tool-call IDs in the saved session |
+| `game_test` calls | 192 | Unique tool-call IDs |
+| Playwright MCP calls | 140 | All `mcp_playwright_*` tool calls |
+| Browser screenshots requested | 27 | `mcp_playwright_browser_take_screenshot` calls |
+| Image blocks processed | 69 | Image content blocks in the saved session |
+| Screenshots retained with the game | 7 | PNG files in the game root |
 
 ## Demo
 
-[Watch the NEON BREACH demo](neon-breach-demo.mp4)
+[Watch the NEON BREACH demo](neon-breach-eval-demo.mp4).
 
 ## Agent Trace
 
-The sanitized agent trace is available as an interactive
-[Agent Trace](https://blazestorm001.github.io/game-harness/traces.html).
+The complete session is available as an interactive
+[agent trace](https://blazestorm001.github.io/game-harness/traces.html).

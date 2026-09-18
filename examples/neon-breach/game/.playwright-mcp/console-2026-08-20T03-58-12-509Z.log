@@ -1,7 +1,0 @@
-[     179ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8017/favicon.ico:0
-[    3740ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8017/favicon.ico:0
-[ 3275363ms] TypeError: Cannot read properties of undefined (reading 'toUpperCase')
-    at drawCenter (http://localhost:8017/js/ui.js:162:26)
-    at drawUI (http://localhost:8017/js/ui.js:259:3)
-    at Game.render (http://localhost:8017/js/game.js:344:5)
-    at frame (http://localhost:8017/js/main.js:35:8)

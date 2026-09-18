@@ -1,6 +1,0 @@
-[    4158ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8017/favicon.ico:0
-[   16764ms] TypeError: this.msg is not a function
-    at Game.onGuardAlert (http://localhost:8017/js/game.js:255:10)
-    at Guard.update (http://localhost:8017/js/entities.js:359:14)
-    at Game.update (http://localhost:8017/js/game.js:110:36)
-    at frame (http://localhost:8017/js/main.js:34:8)

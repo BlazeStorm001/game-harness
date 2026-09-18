@@ -1,259 +1,221 @@
-// NEON BREACH — level definitions.
-// Levels are built programmatically: floor + boundary walls + spine columns
-// (pattern strings) + stamped wall runs + entity cells. This avoids
-// hand-counting dot runs.
-//
-// ASCII legend (internal map format):
-//   # wall    . floor       @ player start
-//   p pillar (blocks)       c console (blocks)
-//   v floor grate (walkable) % hazard floor     * glow floor
-//   k keycard   D blast door (opens when any keycard is taken)
-//   S server core (blocks)  T data terminal (blocks, 1 shard each)
-//   C/L/U/V cameras (mounted, facing right/left/up/down)
-//   G guard     X drone
-//   H exit hatch (walkable)
+/* NEON BREACH - level definitions (declarative, parsed into grid + entities) */
+(function () {
+  'use strict';
+  var W = typeof window !== 'undefined' ? window : {};
+  var LEVELS = [
+    {
+      id: 1,
+      name: 'INTAKE',
+      w: 60, h: 36,
+      par: 90,
+      floors: [
+        [2, 24, 13, 33],  /* A spawn room */
+        [2, 10, 25, 22],  /* B main hall */
+        [18, 2, 34, 8],   /* C top room */
+        [30, 2, 56, 14],  /* D east wing */
+        [42, 15, 46, 16], /* F laser corridor */
+        [34, 17, 56, 32]  /* E vault */
+      ],
+      carves: [
+        [20, 9, 21, 9],   /* B<->C gap (door at 20,9) */
+        [8, 23, 8, 23],   /* A<->B gap (door at 8,23) */
+        [26, 12, 29, 13]  /* B<->D corridor (full width of wall band) */
+      ],
+      spawn: [4, 29],
+      terminals: [[6, 12], [30, 4], [48, 24]],
+      exit: [54, 3],
+      crates: [[10, 27], [16, 17], [17, 17], [40, 10], [41, 10], [46, 26], [44, 28]],
+      guards: [
+        { at: [16, 16], path: [[10, 14], [22, 14], [22, 20], [10, 20]] },
+        { at: [45, 26], path: [[38, 21], [52, 22], [52, 30], [38, 30]] }
+      ],
+      drones: [
+        { at: [41, 8], path: [[34, 4], [46, 4], [46, 12], [34, 12]] }
+      ],
+      lasers: [
+        { a: [43, 14], b: [43, 17] },
+        { a: [45, 14], b: [45, 17] }
+      ],
+      doors: [[20, 9], [8, 23]],
+      reinforce: [[54, 12], [8, 22]]
+    },
+    {
+      id: 2,
+      name: 'SERVER VAULT',
+      w: 60, h: 36,
+      par: 130,
+      floors: [
+        [2, 2, 10, 8],     /* A entry */
+        [2, 12, 27, 24],   /* B hall */
+        [31, 2, 57, 17],   /* C tower */
+        [31, 20, 57, 33],  /* E deep vault */
+        [2, 28, 27, 33],   /* D lower */
+        [28, 14, 30, 15],  /* B<->C corridor */
+        [44, 18, 45, 19],  /* C<->E corridor */
+        [14, 25, 15, 27]   /* B<->D corridor */
+      ],
+      carves: [
+        [4, 9, 5, 11]      /* A<->B passage */
+      ],
+      spawn: [8, 3],
+      terminals: [[9, 7], [14, 18], [54, 27]],
+      exit: [2, 4],
+      crates: [[10, 16], [11, 16], [22, 20], [40, 26], [42, 29], [46, 9], [47, 9]],
+      guards: [
+        { at: [16, 15], path: [[8, 15], [24, 15], [24, 22], [8, 22]] },
+        { at: [44, 10], path: [[35, 5], [55, 5], [55, 15], [35, 15]] },
+        { at: [40, 28], path: [[35, 23], [55, 23], [55, 31], [35, 31]] }
+      ],
+      drones: [
+        { at: [10, 13], path: [[6, 14], [26, 13], [6, 22]] },
+        { at: [50, 23], path: [[34, 30], [56, 30], [56, 24], [34, 24]] }
+      ],
+      lasers: [
+        { a: [27, 14], b: [31, 14] },
+        { a: [27, 15], b: [31, 15] },
+        { a: [44, 17], b: [44, 20] },
+        { a: [45, 17], b: [45, 20] }
+      ],
+      doors: [[14, 26], [15, 26]],
+      reinforce: [[55, 15], [8, 22]]
+    },
+    {
+      id: 3,
+      name: 'CORE',
+      w: 60, h: 36,
+      par: 180,
+      floors: [
+        [20, 2, 39, 10],   /* N wing */
+        [24, 14, 35, 21],  /* core */
+        [20, 25, 39, 33],  /* S wing */
+        [2, 12, 18, 23],   /* W wing */
+        [42, 12, 57, 23],  /* E wing */
+        [29, 11, 30, 13],  /* N->core corridor */
+        [29, 22, 30, 24],  /* core->S corridor */
+        [19, 17, 23, 18],  /* core<->W corridor */
+        [36, 17, 41, 18]   /* core<->E corridor */
+      ],
+      carves: [],
+      spawn: [21, 2],
+      terminals: [[35, 3], [22, 30], [33, 15]],
+      exit: [21, 4],
+      crates: [[25, 7], [25, 30], [9, 18], [43, 22], [27, 18], [32, 18]],
+      guards: [
+        { at: [25, 5], path: [[24, 5], [37, 5], [37, 9], [24, 9]] },
+        { at: [30, 30], path: [[23, 27], [37, 27], [37, 32], [23, 32]] },
+        { at: [10, 17], path: [[5, 15], [16, 15], [16, 21], [5, 21]] },
+        { at: [50, 18], path: [[45, 15], [56, 15], [56, 21], [45, 21]] },
+        { at: [29, 16], path: [[26, 16], [33, 16], [33, 20], [26, 20]] }
+      ],
+      drones: [
+        { at: [31, 5], path: [[28, 3], [34, 3], [34, 7], [28, 7]] },
+        { at: [30, 31], path: [[23, 33], [38, 33], [38, 31], [23, 31]] }
+      ],
+      lasers: [
+        { a: [29, 10], b: [29, 14] },
+        { a: [30, 10], b: [30, 14] },
+        { a: [29, 21], b: [29, 25] },
+        { a: [30, 21], b: [30, 25] },
+        { a: [18, 17], b: [24, 17] },
+        { a: [18, 18], b: [24, 18] },
+        { a: [35, 17], b: [42, 17] },
+        { a: [35, 18], b: [42, 18] }
+      ],
+      doors: [],
+      reinforce: [[5, 20], [55, 20]]
+    }
+  ];
 
-export const TILE = {
-  FLOOR: 0, WALL: 1, PILLAR: 2, CONSOLE: 3, VENT: 4, HAZARD: 5,
-  GLOW: 6, DOOR: 7, EXIT: 8, SERVER: 9, TERMINAL: 10,
-};
-
-// Tiles that block movement / pathfinding / sight.
-export const SOLID = new Set([
-  TILE.WALL, TILE.PILLAR, TILE.CONSOLE, TILE.DOOR, TILE.SERVER, TILE.TERMINAL,
-]);
-
-function buildLevel(cfg) {
-  const { w, h, spines = [], walls = [], cells = {} } = cfg;
-  const rows = [];
-  for (let y = 0; y < h; y++) {
-    const row = [];
-    for (let x = 0; x < w; x++) row.push(y === 0 || y === h - 1 || x === 0 || x === w - 1 ? "#" : ".");
-    rows.push(row);
-  }
-  for (const sp of spines) {
-    for (let i = 0; i < sp.p.length; i++) rows[1 + i][sp.x] = sp.p[i];
-  }
-  for (const [x0, y0, x1, y1] of walls) {
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) rows[y][x] = "#";
-  }
-  for (const key of Object.keys(cells)) {
-    const [x, y] = key.split(",").map(Number);
-    rows[y][x] = cells[key];
-  }
-  return { name: cfg.name, sub: cfg.sub, rows: rows.map(r => r.join("")) };
-}
-
-// ── SECTOR 01 — 40x26 ──────────────────────────────────────────────────────
-// Spine A x=13 (gaps y3-4, y12-13, y21-22); Spine B x=24 (D y5, gaps y15-16)
-const L1 = buildLevel({
-  name: "SECTOR 01 — INTAKE WING",
-  sub: "Extract the data shards. A keycard clears every blast door.",
-  w: 40, h: 26,
-  spines: [
-    { x: 13, p: "##..#######..#######..##" },
-    { x: 24, p: "####D#########..########" },
-  ],
-  walls: [[24, 12, 38, 12]],
-  cells: {
-    "2,23": "@", "3,3": "k",
-    "17,2": "T", "16,23": "T", "31,6": "S", "38,24": "H",
-    "27,3": "C", "18,7": "G", "30,18": "G",
-    "5,1": "c", "6,1": "c", "7,1": "c",
-    "15,10": "p", "21,10": "p", "33,23": "p",
-    "15,12": "v", "16,12": "v", "17,12": "v",
-    "19,11": "%", "38,23": "*",
-  },
-});
-
-// ── SECTOR 02 — 42x28 ──────────────────────────────────────────────────────
-// Spine A x=13 (gaps y4-5, y13-14, y21-22; D y9); Spine B x=28 (gaps y4-5, y14-15, y21-22; D y18)
-const L2 = buildLevel({
-  name: "SECTOR 02 — RESEARCH DECK",
-  sub: "Three strips, two blast doors. Watch the cameras.",
-  w: 42, h: 28,
-  spines: [
-    { x: 13, p: "###..###D###..######..####" },
-    { x: 28, p: "###..########..##D##..####" },
-  ],
-  cells: {
-    "2,25": "@", "6,13": "k",
-    "4,2": "T", "20,25": "T", "39,2": "T",
-    "21,13": "S", "40,26": "H",
-    "10,10": "G", "20,8": "G", "35,13": "G",
-    "16,4": "C", "34,24": "C", "21,20": "X",
-    "8,1": "c", "9,1": "c", "10,1": "c",
-    "35,1": "c", "36,1": "c", "37,1": "c",
-  },
-});
-
-// ── SECTOR 03 — 44x30 ──────────────────────────────────────────────────────
-// Spine A x=14 (gaps y3-7, y12-13; D y8); Spine B x=28 (D y18 only)
-// Vault: x18..24 wall box, D at (21,11), S inside at (21,15)
-const L3 = buildLevel({
-  name: "SECTOR 03 — CORE VAULT",
-  sub: "The core is warded. Cameras inside the vault, drones on the wings.",
-  w: 44, h: 30,
-  spines: [
-    { x: 14, p: "##.....D###..#############" },
-    { x: 28, p: "#################D##########" },
-  ],
-  walls: [
-    [18, 11, 20, 11], [22, 11, 24, 11],
-    [18, 12, 18, 17], [24, 12, 24, 17],
-    [18, 18, 24, 18],
-  ],
-  cells: {
-    "2,27": "@", "9,3": "k",
-    "2,2": "T", "15,26": "T", "40,27": "T",
-    "21,15": "S", "41,27": "H",
-    "7,10": "G", "20,6": "G", "34,10": "G", "33,24": "G",
-    "19,12": "C", "23,12": "L", "35,3": "V",
-    "20,8": "X", "33,15": "X",
-    "15,1": "c", "19,1": "c", "23,1": "c",
-    "17,15": "p", "16,10": "%", "30,27": "*",
-    "21,11": "D",
-  },
-});
-
-export const LEVELS = [L1, L2, L3];
-
-// ── Parsing ────────────────────────────────────────────────────────────────
-
-export function parseLevel(def) {
-  const h = def.rows.length;
-  const w = def.rows[0].length;
-  const tiles = new Uint8Array(w * h);
-  const lvl = {
-    w, h, name: def.name, sub: def.sub, tiles,
-    start: null, doors: [], terminals: [], server: null, exit: null,
-    cameras: [], guards: [], drones: [], keycards: [],
-    shardsTotal: 0,
-  };
-  const put = (x, y, extra) =>
-    Object.assign({ x: x * 32 + 16, y: y * 32 + 16, tx: x, ty: y }, extra);
-  for (let y = 0; y < h; y++) {
-    const row = def.rows[y];
-    for (let x = 0; x < w; x++) {
-      const ch = row[x];
-      let t = TILE.FLOOR;
-      switch (ch) {
-        case "#": t = TILE.WALL; break;
-        case "p": t = TILE.PILLAR; break;
-        case "c": t = TILE.CONSOLE; break;
-        case "v": t = TILE.VENT; break;
-        case "%": t = TILE.HAZARD; break;
-        case "*": t = TILE.GLOW; break;
-        case "D":
-          t = TILE.DOOR;
-          lvl.doors.push(put(x, y, { open: false, anim: 0 }));
-          break;
-        case "S":
-          t = TILE.SERVER;
-          lvl.server = put(x, y, { done: false });
-          break;
-        case "T":
-          t = TILE.TERMINAL;
-          lvl.terminals.push(put(x, y, { done: false }));
-          lvl.shardsTotal++;
-          break;
-        case "H":
-          t = TILE.EXIT;
-          lvl.exit = put(x, y, { done: false });
-          break;
-        case "@": lvl.start = put(x, y); break;
-        case "k": lvl.keycards.push(put(x, y, { taken: false })); break;
-        case "C": case "L": case "U": case "V": {
-          const a = { C: 0, L: Math.PI, U: -Math.PI / 2, V: Math.PI / 2 }[ch];
-          lvl.cameras.push(put(x, y, { angle: a, baseAngle: a, sweep: 0, susp: 0, stun: 0, dir: ch }));
-          break;
-        }
-        case "G": lvl.guards.push(put(x, y, { state: "patrol", susp: 0, down: false })); break;
-        case "X": lvl.drones.push(put(x, y, { dead: false, stun: 0, angle: 0 })); break;
+  /* parse a level definition into runtime structures */
+  function parseLevel(def) {
+    var w = def.w, h = def.h;
+    var grid = [], i, j, x, y;
+    for (j = 0; j < h; j++) { grid.push(new Array(w).fill(1)); }
+    function rect(g, x0, y0, x1, y1, v) {
+      for (var yy = y0; yy <= y1; yy++) for (var xx = x0; xx <= x1; xx++) {
+        if (xx >= 0 && yy >= 0 && xx < w && yy < h) grid[yy][xx] = v;
       }
-      tiles[y * w + x] = t;
     }
-  }
-  return lvl;
-}
+    def.floors.forEach(function (f) { rect(grid, f[0], f[1], f[2], f[3], 0); });
+    def.carves.forEach(function (f) { rect(grid, f[0], f[1], f[2], f[3], 0); });
 
-// Flood-fill validation. Doors are treated as passable (any keycard opens
-// all of them). Terminals/server are solid, so they count as reachable when
-// an adjacent floor tile is.
-export function validateLevel(def) {
-  const errs = [];
-  const rows = def.rows;
-  const h = rows.length;
-  const w = rows[0] && rows[0].length;
-  for (let y = 0; y < h; y++)
-    if (rows[y].length !== w) errs.push(`row ${y}: length ${rows[y].length} != ${w}`);
-  if (errs.length) return errs;
-  const at = (x, y) => rows[y][x];
-  for (let x = 0; x < w; x++) {
-    if (at(x, 0) !== "#") errs.push(`boundary: (${x},0) not wall`);
-    if (at(x, h - 1) !== "#") errs.push(`boundary: (${x},${h - 1}) not wall`);
-  }
-  for (let y = 0; y < h; y++) {
-    if (at(0, y) !== "#") errs.push(`boundary: (0,${y}) not wall`);
-    if (at(w - 1, y) !== "#") errs.push(`boundary: (${w - 1},${y}) not wall`);
-  }
-  const count = (ch) => rows.join("").split(ch).length - 1;
-  for (const ch of ["@", "S", "H"])
-    if (count(ch) !== 1) errs.push(`expected 1 '${ch}', found ${count(ch)}`);
-  if (count("T") < 1) errs.push("no terminals 'T'");
-  if (count("D") > 0 && count("k") < 1) errs.push("has doors but no keycard 'k'");
-  const allowed = new Set("#.@pckDSTHv%*CGLUXVU".split(""));
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++)
-      if (!allowed.has(rows[y][x])) errs.push(`bad char '${rows[y][x]}' at (${x},${y})`);
+    /* occupied marker (for decor avoidance) */
+    var occupies = [];
+    for (j = 0; j < h; j++) { occupies.push(new Array(w).fill(0)); }
 
-  const open = (ch) => !"#pcST".includes(ch); // doors passable
-  let start = -1;
-  for (let y = 0; y < h && start < 0; y++) start = rows[y].indexOf("@");
-  if (start < 0) return [...errs, "no '@' start tile"];
-  const seen = new Uint8Array(w * h);
-  const stack = [start];
-  seen[start] = 1;
-  while (stack.length) {
-    const i = stack.pop();
-    const x = i % w, y = (i / w) | 0;
-    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-      const j = ny * w + nx;
-      if (seen[j] || !open(rows[ny][nx])) continue;
-      seen[j] = 1;
-      stack.push(j);
-    }
-  }
-  const adjacentSeen = (x, y) =>
-    ([1, 0, -1, 0].some((dx, i) => {
-      const nx = x + (i < 2 ? dx : 0), ny = y + (i < 2 ? 0 : i === 2 ? 1 : -1);
-      return nx >= 0 && ny >= 0 && nx < w && ny < h && seen[ny * w + nx];
-    }));
-  const bad = (ch, solid) => {
-    const out = [];
-    for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++)
-        if (rows[y][x] === ch && !(solid ? adjacentSeen(x, y) : seen[y * w + x]))
-          out.push(`(${x},${y})`);
-    return out;
-  };
-  for (const ch of ["k", "H", "D", "G", "C", "X"]) {
-    const b = bad(ch, false);
-    if (b.length) errs.push(`unreachable '${ch}': ${b.join(",")}`);
-  }
-  for (const ch of ["T", "S"]) {
-    const b = bad(ch, true);
-    if (b.length) errs.push(`unreachable '${ch}': ${b.join(",")}`);
-  }
-  return errs;
-}
+    var cx = function (t) { return t * 16 + 8; };
 
-export function validateAll() {
-  const out = [];
-  for (let i = 0; i < LEVELS.length; i++) {
-    const errs = validateLevel(LEVELS[i]);
-    if (errs.length) out.push({ level: i, errs });
+    var terminals = def.terminals.map(function (t) {
+      var tx = t[0], ty = t[1];
+      var face = 'down';
+      if (ty > 0 && grid[ty - 1][tx] === 1) face = 'down';
+      else if (ty < h - 1 && grid[ty + 1][tx] === 1) face = 'up';
+      else if (tx > 0 && grid[ty][tx - 1] === 1) face = 'right';
+      else if (tx < w - 1 && grid[ty][tx + 1] === 1) face = 'left';
+      occupies[ty][tx] = 1;
+      return { x: cx(tx), y: cx(ty), tx: tx, ty: ty, face: face, done: false, progress: 0, hackTimer: 0 };
+    });
+
+    var exitTile = def.exit;
+    occupies[exitTile[1]][exitTile[0]] = 1;
+    def.crates.forEach(function (c) {
+      if (grid[c[1]][c[0]] === 0) grid[c[1]][c[0]] = 2;
+      occupies[c[1]][c[0]] = 1;
+    });
+
+    var guards = def.guards.map(function (g) {
+      occupies[g.at[1]][g.at[0]] = 1;
+      return {
+        x: cx(g.at[0]), y: cx(g.at[1]),
+        path: g.path.map(function (p) { return { x: cx(p[0]), y: cx(p[1]) }; }),
+        pi: 0
+      };
+    });
+    var drones = def.drones.map(function (d) {
+      occupies[d.at[1]][d.at[0]] = 1;
+      return {
+        x: cx(d.at[0]), y: cx(d.at[1]),
+        path: d.path.map(function (p) { return { x: cx(p[0]), y: cx(p[1]) }; }),
+        pi: 0
+      };
+    });
+    var lasers = def.lasers.map(function (l, idx) {
+      occupies[l.a[1]][l.a[0]] = 1;
+      occupies[l.b[1]][l.b[0]] = 1;
+      return {
+        ax: cx(l.a[0]), ay: cx(l.a[1]),
+        bx: cx(l.b[0]), by: cx(l.b[1]),
+        phase: idx * 0.37,
+        on: false, timer: idx * 0.5
+      };
+    });
+    var doors = def.doors.map(function (d) {
+      grid[d[1]][d[0]] = 3;
+      occupies[d[1]][d[0]] = 1;
+      return { x: d[0], y: d[1], open: 0, timer: 0 };
+    });
+
+    return {
+      def: def, w: w, h: h, grid: grid, occupies: occupies,
+      spawn: { x: cx(def.spawn[0]), y: cx(def.spawn[1]) },
+      exit: { x: cx(exitTile[0]), y: cx(exitTile[1]), tx: exitTile[0], ty: exitTile[1] },
+      terminals: terminals,
+      guards: guards,
+      drones: drones,
+      lasers: lasers,
+      doors: doors,
+      reinforce: def.reinforce.map(function (p) { return { x: cx(p[0]), y: cx(p[1]) }; }),
+      par: def.par,
+      name: def.name,
+      id: def.id
+    };
   }
-  return out;
-}
+
+  var api = { LEVELS: LEVELS, parseLevel: parseLevel };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = api;
+  } else {
+    W.NB = W.NB || {};
+    W.NB.Levels = api;
+  }
+})();

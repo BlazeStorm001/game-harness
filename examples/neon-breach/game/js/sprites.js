@@ -1,464 +1,372 @@
-// NEON BREACH — pixel-art sprite system.
-// Sprites are defined as string grids (1 char = 1px) and prerendered to
-// offscreen canvases. Everything the game draws comes from here + code.
+/* NEON BREACH - procedural pixel-art rendering */
+(function () {
+  'use strict';
+  var NB = window.NB;
+  var T = NB.TILE = 16;
 
-const empty = () => null;
-
-function makeCanvas(w, h) {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  return c;
-}
-
-// Draw a pixel map onto a canvas. `pal` maps char -> color. '.'/space/'' = transparent.
-export function drawPixels(ctx, rows, pal, x, y, scale = 1, mirror = false) {
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r];
-    for (let c = 0; c < row.length; c++) {
-      const ch = row[c];
-      const col = pal[ch];
-      if (!col) continue;
-      const cx = mirror ? row.length - 1 - c : c;
-      ctx.fillStyle = col;
-      ctx.fillRect(x + cx * scale, y + r * scale, scale, scale);
+  var PAL = {
+    player: {
+      outline: '#041018', dark: '#0a3040', body: '#0e5f7d', light: '#199fc4',
+      hood: '#0d7292', visor: '#8ffbff', glow: 'rgba(90,240,255,'
+    },
+    guard: {
+      outline: '#140309', dark: '#4d0c26', body: '#93113f', light: '#d31f63',
+      hood: '#b0164c', visor: '#ffe3f2', glow: 'rgba(255,60,150,'
+    },
+    drone: {
+      outline: '#0d0618', dark: '#1c1030', body: '#2c1a4e', light: '#4a2d78',
+      rotor: '#9aa4c8', eye: '#ff3355'
     }
-  }
-}
-
-// Prerender a pixel map to a canvas (with optional glow).
-export function sprite(rows, pal, glow) {
-  const w = Math.max(...rows.map((r) => r.length));
-  const c = makeCanvas(w, rows.length);
-  const ctx = c.getContext("2d");
-  if (glow) {
-    ctx.shadowColor = glow;
-    ctx.shadowBlur = 3;
-  }
-  drawPixels(ctx, rows, pal, 0, 0, 1);
-  ctx.shadowBlur = 0;
-  return c;
-}
-
-function mirrorCanvas(src) {
-  const c = makeCanvas(src.width, src.height);
-  const ctx = c.getContext("2d");
-  ctx.translate(src.width, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(src, 0, 0);
-  return c;
-}
-
-// ---------------------------------------------------------------- agent ---
-// 16x16 hooded operative. Directions: right is canonical, left is mirrored.
-const AGENT = {
-  idleR: [
-    "................",
-    "................",
-    "....hhhhhh......",
-    "...hhhhhhhh.....",
-    "...hhhhhhhh.....",
-    "...vvvvvvv......",
-    "...hhhhhhhh.....",
-    "....bbbbbb......",
-    "...baaaaab......",
-    "...baaaabb......",
-    "...bbabb.b......",
-    "....bbbb........",
-    "....bb.bb.......",
-    "....bb..bb......",
-    "...bbb..bbb.....",
-    "................",
-  ],
-  walkR: [
-    "................",
-    "................",
-    "....hhhhhh......",
-    "...hhhhhhhh.....",
-    "...hhhhhhhh.....",
-    "...vvvvvvv......",
-    "...hhhhhhhh.....",
-    "....bbbbbb......",
-    "...baaaaab......",
-    "...baaaabb......",
-    "...bbabb.b......",
-    "....bbbb........",
-    "...bb...bb......",
-    "..bbb...bbb.....",
-    "..ff....ff......",
-    "................",
-  ],
-  up: [
-    "................",
-    "................",
-    "....hhhhhh......",
-    "...hhhhhhhh.....",
-    "...hhhhhhhh.....",
-    "...hhhhhhhh.....",
-    "...hhhhhhhh.....",
-    "....bbbbbb......",
-    "...bbbbbbb......",
-    "...bbaaaab......",
-    "...bbbbbbb......",
-    "....bbbb........",
-    "....bb.bb.......",
-    "....bb..bb......",
-    "...bbb..bbb.....",
-    "................",
-  ],
-  down: [
-    "................",
-    "................",
-    "....hhhhhh......",
-    "...hhhhhhhh.....",
-    "...hhhhhhhh.....",
-    "...vvvvvvvv.....",
-    "...vvvvvvvv.....",
-    "....bbbbbb......",
-    "...baaaaab......",
-    "...baaaaab......",
-    "...bbbbbbb......",
-    "....bbbb........",
-    "....bb.bb.......",
-    "....bb..bb......",
-    "...bbb..bbb.....",
-    "................",
-  ],
-  crouch: [
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "....hhhhhh......",
-    "...hhhhhhhh.....",
-    "...vvvvvvv......",
-    "...hhhhhhhh.....",
-    "....bbbbbb......",
-    "...baaaab.b.....",
-    "...bbbbbbb......",
-    "...bbbbb........",
-    "...bbb.bbb......",
-    "...ff...ff......",
-  ],
-};
-
-const PAL_AGENT = {
-  h: "#12304a", // hood
-  v: "#3df6ff", // visor
-  b: "#182742", // suit
-  a: "#2fd9f2", // chest accent
-  f: "#0c1526", // boots
-};
-
-const PAL_GUARD = {
-  h: "#4a1220",
-  v: "#ff3355",
-  b: "#3a1420",
-  a: "#ff5c7a",
-  f: "#200a12",
-};
-
-function agentFrames(rows, pal, glow) {
-  const right = sprite(rows, pal, glow);
-  const left = mirrorCanvas(right);
-  return { right, left, up: sprite(rows, pal, glow), down: sprite(rows, pal, glow) };
-}
-
-function buildAgent(pal, glow) {
-  return {
-    idle: {
-      right: sprite(AGENT.idleR, pal, glow),
-      left: mirrorCanvas(sprite(AGENT.idleR, pal, glow)),
-      up: sprite(AGENT.up, pal, glow),
-      down: sprite(AGENT.down, pal, glow),
-    },
-    walk: {
-      right: sprite(AGENT.walkR, pal, glow),
-      left: mirrorCanvas(sprite(AGENT.walkR, pal, glow)),
-      up: sprite(AGENT.up, pal, glow),
-      down: sprite(AGENT.down, pal, glow),
-    },
-    crouch: {
-      right: sprite(AGENT.crouch, pal, glow),
-      left: mirrorCanvas(sprite(AGENT.crouch, pal, glow)),
-      up: sprite(AGENT.crouch, pal, glow),
-      down: sprite(AGENT.crouch, pal, glow),
-    },
   };
-}
+  NB.PAL = PAL;
 
-// ---------------------------------------------------------------- camera ---
-const CAM_IDLE = [
-  "................",
-  "................",
-  "......mmmm......",
-  "....mmmmmmmm....",
-  "...mmmmmmmmmm...",
-  "...mlrrrrrrlm...",
-  "...mlreereelm...",
-  "...mlrrrrrrlm...",
-  "...mmmmmmmmmm...",
-  "....mmmmmmmm....",
-  "......mmmm......",
-  ".....mmmmmm.....",
-  "......mmmm......",
-  "................",
-  "................",
-  "................",
-];
-const PAL_CAM = { m: "#1c2740", l: "#2c3d61", r: "#ff3355", e: "#ffd0da" };
+  function r(ctx, x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x | 0, y | 0, w, h); }
 
-const CAM_STUN = [
-  "................",
-  "................",
-  "......mmmm......",
-  "....mmmmmmmm....",
-  "...mmmmmmmmmm...",
-  "...mlgggggggm...",
-  "...mlgeggegm....",
-  "...mlgggggggm...",
-  "...mmmmmmmmmm...",
-  "....mmmmmmmm....",
-  "......mmmm......",
-  ".....mmmmmm.....",
-  "......mmmm......",
-  "................",
-  "................",
-  "................",
-];
-const PAL_CAM_STUN = { ...PAL_CAM, r: "#3a466b", e: "#9fb4d8", g: "#5b6c96" };
+  /* generic humanoid, 16px tall, centered at (x,y) = body center */
+  function drawChar(ctx, x, y, o) {
+    var p = o.pal;
+    var dir = o.dir || 'down';
+    var ph = o.phase || 0;
+    var walk = o.moving ? Math.sin(ph) * 2.2 : 0;
+    var crouch = o.crouch;
+    var ox = Math.round(x), oy = Math.round(y);
+    var legLiftL = Math.max(0, Math.round(walk));
+    var legLiftR = Math.max(0, Math.round(-walk));
+    var bodyDrop = crouch ? 2 : 0;
 
-// ---------------------------------------------------------------- drone ---
-const DRONE = [
-  "................",
-  "..rr........rr..",
-  ".rrrr......rrrr.",
-  "..rr........rr..",
-  ".....mmmm.......",
-  "....mmmmmm......",
-  "...mmmmmmmm.....",
-  "...mmrrrrmm.....",
-  "...mmeeremm.....",
-  "...mmmmmmmm.....",
-  "....mmmmmm......",
-  ".....mmmm.......",
-  "................",
-  "................",
-  "................",
-  "................",
-];
-const PAL_DRONE = { r: "#ff3355", m: "#252f4a", e: "#ffd0da" };
+    if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
 
-const DRONE_STUN = [
-  "................",
-  "..rr........rr..",
-  ".rrrr......rrrr.",
-  "..rr........rr..",
-  ".....mmmm.......",
-  "....mmmmmm......",
-  "...mmmmmmmm.....",
-  "...mmggggmm.....",
-  "...mmgeemmm.....",
-  "...mmmmmmmm.....",
-  "....mmmmmm......",
-  ".....mmmm.......",
-  "................",
-  "................",
-  "................",
-  "................",
-];
-const PAL_DRONE_STUN = { ...PAL_DRONE, e: "#9fb4d8", g: "#5b6c96" };
+    /* legs */
+    if (!crouch) {
+      r(ctx, ox - 4, oy + 3 - 0, 3, 5 - legLiftL, p.dark);
+      r(ctx, ox + 1, oy + 3, 3, 5 - legLiftR, p.dark);
+      r(ctx, ox - 4, oy + 7 - legLiftL, 3, 1, p.outline);
+      r(ctx, ox + 1, oy + 7 - legLiftR, 3, 1, p.outline);
+      /* boots */
+      r(ctx, ox - 4, oy + 6 - legLiftL, 3, 1, p.body);
+      r(ctx, ox + 1, oy + 6 - legLiftR, 3, 1, p.body);
+    } else {
+      r(ctx, ox - 4, oy + 4, 3, 3, p.dark);
+      r(ctx, ox + 1, oy + 4, 3, 3, p.dark);
+    }
 
-// ---------------------------------------------------------------- shard ---
-const SHARD = [
-  "....cccc....",
-    "...cwwwwc...",
-    "..cwwwwwwc..",
-    "..cwwCCwwc..",
-    ".cwwCCCCwwc.",
-    ".cwwCCCCwwc.",
-    ".cwwwwwwwwc.",
-    "..cwwwwwwc..",
-    "..cwwwwwwc..",
-    "...cwwwwc...",
-    "....cccc....",
-];
-const PAL_SHARD = { c: "#0e7d95", w: "#7df9ff", C: "#e8ffff" };
+    /* arms */
+    var ay = oy - 1 + bodyDrop;
+    r(ctx, ox - 7, ay, 2, 5, p.dark);
+    r(ctx, ox + 5, ay, 2, 5, p.dark);
 
-const KEYCARD = [
-  "..kkkkkk..",
-  ".kYYYYYYYk",
-  ".kYYCCYY.k",
-  ".kYYCCYY.k",
-  ".kYYYYYYYk",
-  "..kkkkkk..",
-];
-const PAL_KEYCARD = { k: "#332200", Y: "#ffc233", C: "#fff2c2" };
+    /* torso */
+    var ty = oy - 2 + bodyDrop;
+    r(ctx, ox - 5, ty, 10, 7, p.outline);
+    r(ctx, ox - 4, ty + 1, 8, 5, p.body);
+    r(ctx, ox - 4, ty + 1, 8, 2, p.light);
+    if (crouch) r(ctx, ox - 4, ty + 5, 8, 1, p.dark);
 
-// ---------------------------------------------------------------- server ---
-// 32x32 server core cabinet
-const SERVER = [
-  "................................",
-  ".FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.",
-  ".rrrrrrrrrrrrrrrrrrrrrrrrrrrrrr.",
-  ".F............................F.",
-  ".F............................F.",
-  ".F.........swwwwwwwwws........F.",
-  ".F.........swCCwwwwCws........F.",
-  ".F.........swwCCwwCCww........F.",
-  ".F.........swCCwwwwCws........F.",
-  ".F.........swwwwwwwwws........F.",
-  ".F............................F.",
-  ".F............................F.",
-  ".F..l...l...l...l...l...l.....F.",
-  ".F..l...l...l...l...l...l.....F.",
-  ".F............................F.",
-  ".rrrrrrrrrrrrrrrrrrrrrrrrrrrrrr.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".F............................F.",
-  ".F.......c.c.c.c.c.c.c........F.",
-  ".FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.",
-  "................................",
-];
-const PAL_SERVER = {
-  F: "#0c1322",
-  r: "#21e6ff",
-  l: "#2fd9f2",
-  s: "#0a2438",
-  w: "#123a5c",
-  C: "#7df9ff",
-  c: "#3dff9a",
-};
+    /* head */
+    var hy = oy - 8 + bodyDrop;
+    r(ctx, ox - 4, hy, 8, 6, p.outline);
+    r(ctx, ox - 3, hy + 1, 6, 4, p.hood);
+    r(ctx, ox - 3, hy + 1, 6, 1, p.light);
+    /* visor by direction */
+    if (dir === 'down') {
+      r(ctx, ox - 3, hy + 2, 6, 2, p.visor);
+      r(ctx, ox - 2, hy + 2, 2, 1, '#ffffff');
+    } else if (dir === 'left') {
+      r(ctx, ox - 4, hy + 2, 3, 2, p.visor);
+    } else if (dir === 'right') {
+      r(ctx, ox + 1, hy + 2, 3, 2, p.visor);
+    }
+    /* up: back of head, small neck seam */
+    if (dir === 'up') r(ctx, ox - 1, hy + 3, 2, 2, p.dark);
 
-// 24x24 data terminal (shard pedestal)
-const TERMINAL = [
-  "........................",
-  "..gggggggggggggggggggg..",
-  "..gFFFFFFFFFFFFFFFFFFg..",
-  "..gFccccccccccccccccFg..",
-  "..gFccccccDDDDccccccFg..",
-  "..gFcccccDDDDDDcccccFg..",
-  "..gFccccDCCCCCCDccccFg..",
-  "..gFccccDCCCCCCDccccFg..",
-  "..gFcccccDDDDDDcccccFg..",
-  "..gFccccccDDDDccccccFg..",
-  "..gFccccccccccccccccFg..",
-  "..gFFFFFFFFFFFFFFFFFFg..",
-  "....gggggggggggggggg....",
-  "....pppppppppppppppp....",
-  "....pppppppppppppppp....",
-  "....pp............pp....",
-  "....pp............pp....",
-  "....pp............pp....",
-  "...ppp............ppp...",
-  "........................",
-  "........................",
-  "........................",
-  "........................",
-  "........................",
-];
-const PAL_TERM = { g: "#0c1322", F: "#22325a", c: "#0e2a44", D: "#123a5c", p: "#151d33" };
+    /* gun */
+    if (o.gun) {
+      var g = o.gunDir || dir;
+      if (g === 'down') { r(ctx, ox + 3, oy + 1 + bodyDrop, 2, 5, '#2a2f3f'); r(ctx, ox + 3, oy + 5 + bodyDrop, 2, 1, '#ff4d6d'); }
+      else if (g === 'up') { r(ctx, ox - 5, oy - 2 + bodyDrop, 2, 5, '#2a2f3f'); r(ctx, ox - 5, oy - 3 + bodyDrop, 2, 1, '#ff4d6d'); }
+      else if (g === 'left') { r(ctx, ox - 9, oy + 1 + bodyDrop, 5, 2, '#2a2f3f'); r(ctx, ox - 9, oy + 1 + bodyDrop, 1, 2, '#ff4d6d'); }
+      else { r(ctx, ox + 4, oy + 1 + bodyDrop, 5, 2, '#2a2f3f'); r(ctx, ox + 8, oy + 1 + bodyDrop, 1, 2, '#ff4d6d'); }
+    }
 
-// 32x32 blast door (frame drawn around tile, panel inside)
-const DOOR = [
-  "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-  "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-  "hhPYLPPPPPPPPPPRRPPPPPPPPPPLYPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPPLPPPPPPPPPPffPPPPPPPPPPLPPhh",
-  "hhPYLPPPPPPPPPPffPPPPPPPPPPLYPhh",
-  "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-  "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-];
-const PAL_DOOR = { h: "#0c1322", P: "#1a2745", L: "#21e6ff", f: "#0a1120", Y: "#ffc233", R: "#ff3355" };
-
-// 32x32 exit pod
-const EXIT = [
-  "................................",
-  "............ddddddd.............",
-  ".........ddddddddddddd..........",
-  ".......ddddddddddddddddd........",
-  "......ddddddcccccccdddddd.......",
-  ".....dddddcccccccccccddddd......",
-  "....ddddcccccccccccccccdddd.....",
-  "...ddddccDDDDDDDDcccccccdddd....",
-  "...dddccDDDDDDDDDccccccccddd....",
-  "..ddddccDDDDDDDDDccccccccdddd...",
-  "..dddcccccccccccccccccccccddd...",
-  "..dddcccccccccccccccccccccddd...",
-  ".dddcccccccccccEEccccccccccddd..",
-  ".dddcccccccccccEEccccccccccddd..",
-  ".dddcccccccccccccccccccccccddd..",
-  ".dddccccDDDDDDDDDccccccccccddd..",
-  ".dddccccDDDDDDDDDccccccccccddd..",
-  ".dddccccDDDDDDDDDccccccccccddd..",
-  ".dddcccccccccccccccccccccccddd..",
-  "..dddcccccccccccccccccccccddd...",
-  "..dddcccccccccccccccccccccddd...",
-  "..ddddcccccccccccccccccccdddd...",
-  "...dddcccccccccccccccccccddd....",
-  "...ddddcccccccccccccccccdddd....",
-  "....ddddcccccccccccccccdddd.....",
-  ".....dddddcccccccccccddddd......",
-  "......ddddddcccccccdddddd.......",
-  ".......ddddddddddddddddd........",
-  ".........ddddddddddddd..........",
-  "............ddddddd.............",
-  "................................",
-  "................................",
-];
-const PAL_EXIT = { d: "#0c1322", c: "#0e2a44", D: "#7df9ff", E: "#e8ffff" };
-
-export function buildAll() {
-  return {
-    agent: buildAgent(PAL_AGENT, "#2ff3ff55"),
-    guard: buildAgent(PAL_GUARD, "#ff335555"),
-    camIdle: sprite(CAM_IDLE, PAL_CAM, "#ff335588"),
-    camStun: sprite(CAM_STUN, PAL_CAM_STUN),
-    drone: sprite(DRONE, PAL_DRONE, "#ff335588"),
-    droneStun: sprite(DRONE_STUN, PAL_DRONE_STUN),
-    shard: sprite(SHARD, PAL_SHARD, "#7df9ff"),
-    keycard: sprite(KEYCARD, PAL_KEYCARD, "#ffc233"),
-    server: sprite(SERVER, PAL_SERVER, "#21e6ff44"),
-    terminal: sprite(TERMINAL, PAL_TERM),
-    door: sprite(DOOR, PAL_DOOR),
-    exit: sprite(EXIT, PAL_EXIT, "#7df9ff88"),
+    /* stun flicker */
+    if (o.stun) {
+      r(ctx, ox - 5, hy, 10, 7, 'rgba(255,255,255,' + (0.25 + 0.2 * Math.sin(o.stunT * 30)) + ')');
+    }
+    ctx.globalAlpha = 1;
+  }
+  NB.Sprites = NB.Sprites || {};
+  NB.Sprites.drawPlayer = function (ctx, x, y, o) {
+    o = o || {};
+    o.pal = PAL.player;
+    drawChar(ctx, x, y, o);
   };
-}
+  NB.Sprites.drawGuard = function (ctx, x, y, o) {
+    o = o || {};
+    o.pal = PAL.guard;
+    drawChar(ctx, x, y, o);
+  };
+  NB.Sprites.drawDrone = function (ctx, x, y, o) {
+    o = o || {};
+    var p = PAL.drone;
+    var t = o.t || 0;
+    var bob = Math.sin(t * 3) * 1.5;
+    var ox = Math.round(x), oy = Math.round(y + bob);
+    if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
+    /* rotors */
+    var spin = Math.floor(t * 14) % 2 === 0;
+    var rw = spin ? 4 : 2, rh = spin ? 2 : 1;
+    [[-6, -4], [6, -4], [-6, 4], [6, 4]].forEach(function (q) {
+      r(ctx, ox + q[0] - (rw / 2), oy + q[1] - 1, rw, 1, p.rotor);
+    });
+    /* arms */
+    r(ctx, ox - 6, oy - 2, 3, 1, p.dark); r(ctx, ox + 3, oy - 2, 3, 1, p.dark);
+    r(ctx, ox - 6, oy + 1, 3, 1, p.dark); r(ctx, ox + 3, oy + 1, 3, 1, p.dark);
+    /* body */
+    r(ctx, ox - 4, oy - 3, 8, 7, p.outline);
+    r(ctx, ox - 3, oy - 2, 6, 5, p.body);
+    r(ctx, ox - 3, oy - 2, 6, 2, p.light);
+    /* dome */
+    r(ctx, ox - 2, oy - 4, 4, 2, p.outline);
+    r(ctx, ox - 1, oy - 3, 2, 1, p.light);
+    /* eye */
+    var flash = o.flash || 0;
+    r(ctx, ox - 1, oy, 2, 2, flash ? '#ffffff' : p.eye);
+    if (o.underlight) {
+      NB.Glow.circle(ctx, ox, oy + 6, 10, 'rgba(255,50,80,0.20)');
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  NB.Glow = {
+    circle: function (ctx, x, y, r, color) {
+      var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      var old = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.globalCompositeOperation = old;
+    }
+  };
+
+  /* vision cone */
+  NB.Sprites.drawCone = function (ctx, x, y, angle, half, range, rgb, alpha, dashTo) {
+    ctx.save();
+    var g = ctx.createRadialGradient(x, y, 4, x, y, range);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + (alpha * 0.55) + ')');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(x, y, range, angle - half, angle + half);
+    ctx.closePath();
+    ctx.fill();
+    if (dashTo) {
+      ctx.strokeStyle = 'rgba(' + rgb + ',0.85)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(dashTo.x, dashTo.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  };
+
+  /* ---------- 1px-per-tile minimap (pre-rendered per level) ---------- */
+  NB.Sprites.buildMinimap = function (L) {
+    var c = document.createElement('canvas');
+    c.width = L.w; c.height = L.h;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#04070f';
+    ctx.fillRect(0, 0, L.w, L.h);
+    for (var y = 0; y < L.h; y++) for (var x = 0; x < L.w; x++) {
+      var t = L.grid[y][x];
+      if (t === 1) ctx.fillStyle = '#26314f';
+      else if (t === 2) ctx.fillStyle = '#3d4a72';
+      else ctx.fillStyle = '#0f1a31';
+      ctx.fillRect(x, y, 1, 1);
+    }
+    return c;
+  };
+
+  /* ---------- static level layer ---------- */
+  function hash2(x, y, s) {
+    var h = (x * 374761393 + y * 668265263 + s * 974634) | 0;
+    h = (h ^ (h >> 13)) * 1274126177 | 0;
+    return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+  }
+
+  NB.Sprites.buildStatic = function (L) {
+    var c = document.createElement('canvas');
+    c.width = L.w * T; c.height = L.h * T;
+    var ctx = c.getContext('2d');
+    var i, j;
+    /* void */
+    ctx.fillStyle = '#03040a';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = 'rgba(50,70,140,0.05)';
+    ctx.lineWidth = 1;
+    for (i = 0; i <= c.width; i += 32) { ctx.beginPath(); ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, c.height); ctx.stroke(); }
+    for (j = 0; j <= c.height; j += 32) { ctx.beginPath(); ctx.moveTo(0, j + 0.5); ctx.lineTo(c.width, j + 0.5); ctx.stroke(); }
+
+    var inb = function (x, y) { return x >= 0 && y >= 0 && x < L.w && y < L.h; };
+    var FLOOR_SHADES = ['#0a0e1c', '#0b101f', '#090d1a'];
+
+    /* floor */
+    for (j = 0; j < L.h; j++) for (i = 0; i < L.w; i++) {
+      var t = L.grid[j][i];
+      if (t === 1 || t === 2) continue;
+      var px = i * T, py = j * T;
+      var hsh = hash2(i, j, 7);
+      ctx.fillStyle = FLOOR_SHADES[Math.min(2, hsh * 3 | 0)];
+      ctx.fillRect(px, py, T, T);
+      ctx.strokeStyle = 'rgba(30,42,80,0.55)';
+      ctx.strokeRect(px + 0.5, py + 0.5, T - 1, T - 1);
+      /* subtle tile inner detail */
+      if (hsh > 0.86) { ctx.fillStyle = 'rgba(18,26,52,0.6)'; ctx.fillRect(px + 3, py + 3, T - 6, T - 6); }
+      if (hash2(i, j, 11) > 0.93) { ctx.fillStyle = 'rgba(60,80,150,0.10)'; ctx.fillRect(px + 1, py + 1, T - 2, 2); }
+    }
+
+    /* floor decor: vents */
+    for (j = 0; j < L.h; j++) for (i = 0; i < L.w; i++) {
+      if (L.grid[j][i] !== 0) continue;
+      var hv = hash2(i, j, 23);
+      if (hv > 0.965) {
+        var px = i * T, py = j * T;
+        ctx.fillStyle = '#0c1120'; ctx.fillRect(px + 2, py + 3, 12, 10);
+        ctx.fillStyle = '#151d38';
+        for (var s = 0; s < 4; s++) ctx.fillRect(px + 3, py + 4 + s * 2, 10, 1);
+      }
+    }
+    /* wall-hugging decor: server racks & pipes (only on floor tiles next to wall) */
+    for (j = 0; j < L.h; j++) for (i = 0; i < L.w; i++) {
+      if (L.grid[j][i] !== 0) continue;
+      var up = inb(i, j - 1) && L.grid[j - 1][i] === 1;
+      var dn = inb(i, j + 1) && L.grid[j + 1][i] === 1;
+      var lf = inb(i - 1, j) && L.grid[j][i - 1] === 1;
+      var rt = inb(i + 1, j) && L.grid[j][i + 1] === 1;
+      var px = i * T, py = j * T;
+      var hd = hash2(i, j, 31);
+      if (up && !dn && hd > 0.72 && L.occupies[i][j] === 0) {
+        /* console against wall */
+        ctx.fillStyle = '#10162c'; ctx.fillRect(px + 1, py + 1, 14, 10);
+        ctx.fillStyle = '#1a2342'; ctx.fillRect(px + 2, py + 2, 12, 8);
+        ctx.fillStyle = '#2de0ff';
+        if (hash2(i, j, 33) > 0.5) ctx.fillRect(px + 3, py + 4, 4, 2);
+        else ctx.fillRect(px + 8, py + 3, 3, 3);
+        ctx.fillStyle = '#0c1120'; ctx.fillRect(px + 1, py + 9, 14, 2);
+      } else if ((lf || rt) && hd > 0.8 && L.occupies[i][j] === 0) {
+        /* wall pipe run */
+        ctx.fillStyle = '#141b33';
+        if (lf) ctx.fillRect(px + 1, py + 5, 14, 3);
+        if (rt) ctx.fillRect(px + 1, py + 5, 14, 3);
+        ctx.fillStyle = '#232e55';
+        if (lf) ctx.fillRect(px + 1, py + 5, 14, 1);
+        if (rt) ctx.fillRect(px + 1, py + 5, 14, 1);
+      }
+    }
+
+    /* crates */
+    for (j = 0; j < L.h; j++) for (i = 0; i < L.w; i++) {
+      if (L.grid[j][i] !== 2) continue;
+      var px = i * T, py = j * T;
+      ctx.fillStyle = '#0d1220'; ctx.fillRect(px + 1, py + 1, 14, 14);
+      ctx.fillStyle = '#232b46'; ctx.fillRect(px + 2, py + 2, 12, 12);
+      ctx.fillStyle = '#2c3654'; ctx.fillRect(px + 3, py + 3, 10, 10);
+      ctx.fillStyle = '#171e36'; ctx.fillRect(px + 4, py + 7, 8, 1);
+      /* corner brackets */
+      ctx.fillStyle = '#ff9a2a';
+      ctx.fillRect(px + 2, py + 2, 3, 1); ctx.fillRect(px + 2, py + 2, 1, 3);
+      ctx.fillRect(px + 11, py + 2, 3, 1); ctx.fillRect(px + 13, py + 3, 1, 2);
+      ctx.fillRect(px + 2, py + 13, 3, 1); ctx.fillRect(px + 2, py + 11, 1, 3);
+      ctx.fillRect(px + 11, py + 13, 3, 1); ctx.fillRect(px + 13, py + 11, 1, 2);
+    }
+
+    /* walls */
+    for (j = 0; j < L.h; j++) for (i = 0; i < L.w; i++) {
+      if (L.grid[j][i] !== 1) continue;
+      var px = i * T, py = j * T;
+      ctx.fillStyle = '#0e1226';
+      ctx.fillRect(px, py, T, T);
+      ctx.fillStyle = '#141a33';
+      ctx.fillRect(px + 1, py + 1, T - 2, T - 2);
+      /* bevels toward open sides */
+      var nw = !inb(i, j - 1) || L.grid[j - 1][i] !== 1;
+      var sw = !inb(i, j + 1) || L.grid[j + 1][i] !== 1;
+      var nw2 = !inb(i - 1, j) || L.grid[j][i - 1] !== 1;
+      var ne2 = !inb(i + 1, j) || L.grid[j][i + 1] !== 1;
+      if (nw) { ctx.fillStyle = '#2b3560'; ctx.fillRect(px, py, T, 2); ctx.fillStyle = '#4a5a95'; ctx.fillRect(px, py, T, 1); }
+      if (sw) { ctx.fillStyle = '#060812'; ctx.fillRect(px, py + T - 2, T, 2); }
+      if (nw2) { ctx.fillStyle = '#1a2140'; ctx.fillRect(px, py, 2, T); }
+      if (ne2) { ctx.fillStyle = '#060812'; ctx.fillRect(px + T - 2, py, 2, T); }
+      /* panel details */
+      var hp = hash2(i, j, 41);
+      if (hp > 0.6) {
+        ctx.fillStyle = '#1c2547';
+        ctx.fillRect(px + 4, py + 5, 8, 6);
+        ctx.fillStyle = '#2a3560';
+        ctx.fillRect(px + 5, py + 6, 6, 4);
+      }
+      /* rivets */
+      ctx.fillStyle = '#232c52';
+      ctx.fillRect(px + 2, py + 2, 1, 1); ctx.fillRect(px + T - 3, py + 2, 1, 1);
+      ctx.fillRect(px + 2, py + T - 3, 1, 1); ctx.fillRect(px + T - 3, py + T - 3, 1, 1);
+    }
+
+    /* door frames */
+    L.doors.forEach(function (d) {
+      var px = d.x * T, py = d.y * T;
+      ctx.fillStyle = '#181f3a';
+      ctx.fillRect(px - 1, py - 1, T + 2, T + 2);
+      ctx.fillStyle = '#2c3a63';
+      ctx.fillRect(px - 1, py - 1, T + 2, 2);
+      ctx.fillRect(px - 1, py - 1, 2, T + 2);
+      ctx.fillRect(px + T - 1, py - 1, 2, T + 2);
+      ctx.fillStyle = '#0a0e1e';
+      ctx.fillRect(px, py, T, T);
+    });
+
+    /* laser emitters (l.ax/l.ay are pixel coords -> snap to the enclosing tile) */
+    L.lasers.forEach(function (l) {
+      [[l.ax, l.ay], [l.bx, l.by]].forEach(function (q) {
+        var px = Math.round((q[0] - 8) / T) * T + 4, py = Math.round((q[1] - 8) / T) * T + 4;
+        ctx.fillStyle = '#10142a'; ctx.fillRect(px - 1, py - 1, 10, 10);
+        ctx.fillStyle = '#1d2440'; ctx.fillRect(px, py, 8, 8);
+        ctx.fillStyle = '#ff2038'; ctx.fillRect(px + 2, py + 2, 4, 4);
+      });
+    });
+
+    /* terminal racks (tx/ty are the rack's tile; t.x/t.y are the pixel centre) */
+    L.terminals.forEach(function (t) {
+      var px = t.tx * T, py = t.ty * T;
+      var f = t.face; /* 'up' means rack sits with screen facing down (toward floor below) */
+      ctx.fillStyle = '#0d1220';
+      ctx.fillRect(px + 1, py + 1, 14, 14);
+      ctx.fillStyle = '#1a2140';
+      ctx.fillRect(px + 2, py + 2, 12, 12);
+      /* rack body with screen on floor-facing side */
+      ctx.fillStyle = '#252e52';
+      if (f === 'down') ctx.fillRect(px + 3, py + 3, 10, 8);
+      if (f === 'up') ctx.fillRect(px + 3, py + 5, 10, 8);
+      if (f === 'left') ctx.fillRect(px + 5, py + 3, 8, 10);
+      if (f === 'right') ctx.fillRect(px + 3, py + 3, 8, 10);
+    });
+
+    /* exit pad (e.x/e.y are the pixel centre; draw the tile it occupies) */
+    var e = L.exit;
+    var etx = (e.tx !== undefined) ? e.tx : Math.round((e.x - 8) / T);
+    var ety = (e.ty !== undefined) ? e.ty : Math.round((e.y - 8) / T);
+    var px = etx * T, py = ety * T;
+    ctx.fillStyle = '#0a0f20';
+    ctx.fillRect(px - 2, py - 2, T + 4, T + 4);
+    ctx.fillStyle = '#101a33';
+    ctx.fillRect(px - 1, py - 1, T + 2, T + 2);
+    ctx.fillStyle = '#060a16';
+    ctx.fillRect(px, py, T, T);
+
+    return c;
+  };
+})();

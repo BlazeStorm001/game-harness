@@ -2,31 +2,22 @@
 
 A minimal Pi harness for long-running autonomous browser-game development.
 
-NEON BREACH Game is the example case study: a complete browser game created by a local
-Qwen3.8-27B model, including procedural art, production tests, browser
-experiments, and autonomous test bots.
+NEON BREACH Game is the example case study: a complete browser game created by a local Qwen3.8-27B model, including procedural art, production tests, browser experiments, and deterministic simulation tests.
 
 ## NEON BREACH Case Study
 
 [Play NEON BREACH](https://blazestorm001.github.io/game-harness/)
 
-
-
-https://github.com/user-attachments/assets/b2d166ed-fc4b-4002-84df-28616f8f2507
-
-
+[Watch the Demo](examples/neon-breach/neon-breach-eval-demo.mp4)
 
 - [Experiment Results](examples/neon-breach/README.md)
-- [Sanitized agent trace](https://blazestorm001.github.io/game-harness/traces.html)
+- [Agent trace](https://blazestorm001.github.io/game-harness/traces.html)
 
-Qwen created the game, procedural sprites, game documentation, production tests,
-Playwright experiments, and bots.
+Qwen created the game, procedural sprites, game documentation, production tests, and Playwright experiments during a single nine-hour run.
 
 ## Requirements
 
-The supported environments are Linux and WSL2. You need Node.js 20+, npm, Bash,
-Git, `curl`, `jq`, `rg`, GNU `timeout`, `realpath`, and `sha256sum`, plus a
-compatible running model server.
+The supported environments are Linux and WSL2. You need Node.js 20+, npm, Bash,Git, `curl`, `jq`, `rg`, GNU `timeout`, `realpath`, and `sha256sum`, plus a compatible running model server.
 
 ## Install
 
@@ -37,10 +28,11 @@ compatible running model server.
 
 ## Start The Model Server
 
-A tested configuration (Qwen3.8-27B `UD-Q3_K_XL`) is
+A portable copy of the configuration used for the case study is
 [`harness/presets/qwen3.8-27b-rtx5060ti.ini`](harness/presets/qwen3.8-27b-rtx5060ti.ini).
-Replace its placeholder `model` and `mmproj` paths, then run from the repository
-root:
+It pairs an ASCII-condensed `UD-Q3_K_XL` target with a compatible
+ASCII-condensed DFlash2 `Q2_K` draft. Replace the placeholder `model`,
+`spec-draft-model`, and `mmproj` paths, then run from the repository root:
 
 ```bash
 llama serve \
@@ -56,6 +48,17 @@ The harness defaults match the preset section name and server address:
 export PI_MODEL=qwen
 export LLAMA_URL=http://127.0.0.1:8080/v1
 ```
+
+The evaluated machine used an RTX 5060 Ti as `CUDA0` for the target and draft,
+and a T400 as `CUDA1` for the multimodal projector. Adjust the device fields for
+your hardware. The preset uses an 86,000-token context, Q4 target and draft KV
+caches, and DFlash proposals of up to four tokens.
+
+The matched model pair was produced with one shared vocabulary mapping based on
+[Qwen3.8-27B ASCII Condensed](https://huggingface.co/bsaleh03/Qwen3.8-27B-ASCII-Condensed),
+retaining ASCII, byte-fallback, and special tokens. The draft originates from
+[Qwen3.8-27B-DFlash2](https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2); see
+llama.cpp's [DFlash documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md#dflash-draft-dflash).
 
 ## Supply A Scenario
 
@@ -109,8 +112,7 @@ Pi runs with `--no-context-files`, `--no-skills`, and an isolated
 not a security boundary: Pi retains the launching user's filesystem permissions.
 
 The `game_test` extension drives a real browser and asks generated games for a
-deterministic `window.__gameTest` contract. Playwright
-MCP is also available.
+action-transition-observation loop. Playwright MCP is also available.
 
 Cloudflare image generation is optional and remote. Export credentials in the shell used to launch the experiment. See Cloudflare's
 [Workers AI REST API setup](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).:
