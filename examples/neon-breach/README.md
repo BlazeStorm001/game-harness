@@ -26,8 +26,8 @@ Qwen did not call the optional `generate_image` tool. It generated the game's ar
 
 ## Run Configuration
 
-The llama.cpp server used an ASCII-condensed Qwen3.8-27B `UD-Q3_K_XL` target
-with a compatible ASCII-condensed DFlash2 `Q2_K` draft exported using the same
+The llama.cpp server used an ASCII-condensed Qwen3.8-27B `UD-Q3_K_XL` target derived from the methods described here [bsaleh03/Qwen3.8-27B-ASCII-Condensed](https://huggingface.co/bsaleh03/Qwen3.8-27B-ASCII-Condensed)
+with a compatible ASCII-condensed DFlash2 [Q2_K draft](https://huggingface.co/Blazestorm001/Qwen3.8-27B-ASCII-Condensed-DFlash2-GGUF) exported using the same
 token mapping. It ran with an 86,000-token context, Q4 target and draft KV
 caches, and DFlash proposals of up to four tokens. The target and draft ran on
 an RTX 5060 Ti; the F16 multimodal projector ran on a T400.
