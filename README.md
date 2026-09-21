@@ -10,7 +10,9 @@ A minimal harness around the Pi coding agent for long-running autonomous simple 
 Evaluating whether a local model can do long-horizon, tool-using work requires a stable agent, a real browser, and sessions that survive hours of autonomous turns. This harness provides that setup, and the preserved NEON BREACH run shows what a single nine-hour session produces.
 
 - [Play NEON BREACH](https://blazestorm001.github.io/game-harness/)
-- [Watch the demo](examples/neon-breach/neon-breach-eval-demo.mp4)
+
+https://github.com/user-attachments/assets/13a52784-d0fe-40f3-91c3-5eb003e6f420
+
 - [Experiment results](examples/neon-breach/README.md)
 - [Agent trace](https://blazestorm001.github.io/game-harness/traces.html)
 
