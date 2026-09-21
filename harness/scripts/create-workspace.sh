@@ -4,19 +4,24 @@ set -Eeuo pipefail
 harness_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_root="$(cd -- "$harness_root/.." && pwd)"
 workspaces_root="$repo_root/.runs"
-scenario="${1:-neon-breach}"
+scenario="${1:-}"
 
 usage() {
-  echo "Usage: $0 [SCENARIO_PATH_OR_NAME]" >&2
+  echo "Usage: $0 SCENARIO_PATH" >&2
 }
 
 (( $# <= 1 )) || { usage; exit 2; }
-
-if [[ -d "$scenario" ]]; then
-  scenario_root="$(realpath "$scenario")"
-else
-  scenario_root="$harness_root/scenarios/$scenario"
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
 fi
+[[ -n "$scenario" ]] || { usage; exit 2; }
+
+[[ -d "$scenario" ]] || {
+  echo "Scenario directory not found: $scenario" >&2
+  exit 2
+}
+scenario_root="$(realpath "$scenario")"
 
 for prompt in initial continue final; do
   [[ -f "$scenario_root/prompts/$prompt.txt" ]] || {

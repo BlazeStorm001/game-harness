@@ -1,69 +1,40 @@
 # Minimal Agentic Game Development Harness
 
-A minimal Pi harness for long-running autonomous browser-game development.
+A minimal harness around the Pi coding agent for long-running autonomous simple browser-game development. The bundled NEON BREACH case study is a complete browser game created by a local Qwen3.8-27B model in a single nine-hour run.
 
-NEON BREACH Game is the example case study: a complete browser game created by a local Qwen3.8-27B model, including procedural art, production tests, browser experiments, and deterministic simulation tests.
+[![Deploy game to GitHub Pages](https://github.com/BlazeStorm001/game-harness/actions/workflows/pages.yml/badge.svg)](https://github.com/BlazeStorm001/game-harness/actions/workflows/pages.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-## NEON BREACH Case Study
+## Why
 
-[Play NEON BREACH](https://blazestorm001.github.io/game-harness/)
+Evaluating whether a local model can do long-horizon, tool-using work requires a stable agent, a real browser, and sessions that survive hours of autonomous turns. This harness provides that setup, and the preserved NEON BREACH run shows what a single nine-hour session produces.
 
-[Watch the Demo](examples/neon-breach/neon-breach-eval-demo.mp4)
-
-- [Experiment Results](examples/neon-breach/README.md)
+- [Play NEON BREACH](https://blazestorm001.github.io/game-harness/)
+- [Watch the demo](examples/neon-breach/neon-breach-eval-demo.mp4)
+- [Experiment results](examples/neon-breach/README.md)
 - [Agent trace](https://blazestorm001.github.io/game-harness/traces.html)
 
-Qwen created the game, procedural sprites, game documentation, production tests, and Playwright experiments during a single nine-hour run.
+## Quick start
+
+```bash
+# install pinned dependencies and verify
+./harness/scripts/setup.sh --install
+./harness/scripts/setup.sh --check
+
+# start a model server (see "Model server" below), then run the bundled scenario
+./harness/scripts/run-eval.sh --scenario harness/scenarios/neon-breach --hours 10
+```
 
 ## Requirements
 
-The supported environments are Linux and WSL2. You need Node.js 20+, npm, Bash,Git, `curl`, `jq`, `rg`, GNU `timeout`, `realpath`, and `sha256sum`, plus a compatible running model server.
+- Linux or WSL2
+- Node.js 20+, npm, Bash, Git
+- `curl`, `jq`, `rg`, GNU `timeout`, `realpath`, `sha256sum`
+- A running llama.cpp model server (see Model server)
 
-## Install
+## Scenarios
 
-```bash
-./harness/scripts/setup.sh --install
-./harness/scripts/setup.sh --check
-```
-
-## Start The Model Server
-
-A portable copy of the configuration used for the case study is
-[`harness/presets/qwen3.8-27b-rtx5060ti.ini`](harness/presets/qwen3.8-27b-rtx5060ti.ini).
-It pairs an ASCII-condensed `UD-Q3_K_XL` target with a compatible
-ASCII-condensed DFlash2 `Q2_K` draft. Replace the placeholder `model`,
-`spec-draft-model`, and `mmproj` paths, then run from the repository root:
-
-```bash
-llama serve \
-  --models-preset harness/presets/qwen3.8-27b-rtx5060ti.ini \
-  --models-max 1 \
-  --host 127.0.0.1 \
-  --port 8080
-```
-
-The harness defaults match the preset section name and server address:
-
-```bash
-export PI_MODEL=qwen
-export LLAMA_URL=http://127.0.0.1:8080/v1
-```
-
-The evaluated machine used an RTX 5060 Ti as `CUDA0` for the target and draft,
-and a T400 as `CUDA1` for the multimodal projector. Adjust the device fields for
-your hardware. The preset uses an 86,000-token context, Q4 target and draft KV
-caches, and DFlash proposals of up to four tokens.
-
-The matched model pair was produced with one shared vocabulary mapping based on
-[Qwen3.8-27B ASCII Condensed](https://huggingface.co/bsaleh03/Qwen3.8-27B-ASCII-Condensed),
-retaining ASCII, byte-fallback, and special tokens. The draft originates from
-[Qwen3.8-27B-DFlash2](https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2); see
-llama.cpp's [DFlash documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md#dflash-draft-dflash).
-
-## Supply A Scenario
-
-A scenario can be a bundled name or a directory with three prompts and optional
-reference images:
+A scenario is a directory with three prompts and optional reference images:
 
 ```text
 my-scenario/
@@ -74,9 +45,20 @@ my-scenario/
   references/              # optional PNG, JPEG, or WebP files
 ```
 
-`initial.txt` starts a new session with its references for task, `continue.txt` guides
-each autonomous turn and later resume, and `final.txt` reserves the closing
+`initial.txt` starts a new session with its references, `continue.txt` guides
+each autonomous turn and later resumes, and `final.txt` reserves the closing
 validation pass.
+
+## Usage
+
+Start the llama.cpp model server before running an experiment. See
+[Model server](#model-server) below for the case-study configuration.
+
+Run the bundled scenario:
+
+```bash
+./harness/scripts/run-eval.sh --scenario harness/scenarios/neon-breach --hours 10
+```
 
 Run a custom scenario:
 
@@ -84,47 +66,77 @@ Run a custom scenario:
 ./harness/scripts/run-eval.sh --scenario /path/to/my-scenario --hours 10
 ```
 
-## Run An Experiment
+Each run receives a new workspace at `.runs/<scenario>-<timestamp>/`. Continue
+a specific saved session without replaying its initial prompt or references:
 
 ```bash
-./harness/scripts/run-eval.sh --scenario neon-breach --hours 10
+./harness/scripts/run-eval.sh --resume neon-breach-20260910-004540 --hours 10
 ```
 
-Each run receives a new workspace at
-`.runs/<scenario>-<timestamp>/`. Continue the newest saved session without
-replaying its initial prompt or references with:
+Or continue the newest saved session:
 
 ```bash
 ./harness/scripts/run-eval.sh --resume-latest --hours 10
 ```
 
-The historical defaults are a 75-minute turn watchdog and a 60-minute final
-phase. `TURN_MINUTES` limits a stalled Pi process while preserving its saved
-session for continuation. `FINAL_MINUTES` reserves time for the scenario's
-closing validation prompt. Override them with `TURN_MINUTES` and `FINAL_MINUTES`.
-Each invocation records versions, input hashes, timings, statuses, and session
-identity in its run metadata.
+`TURN_MINUTES` (default 75) limits a stalled Pi process while preserving its
+saved session for continuation. `FINAL_MINUTES` (default 60) reserves time for
+the scenario's closing validation prompt. Each invocation records versions,
+input hashes, timings, statuses, and session identity in its run metadata.
 
-## Context And Tools
+## Model server
 
-Pi runs with `--no-context-files`, `--no-skills`, and an isolated
-`PI_CODING_AGENT_DIR`. This reduces accidental context contamination, but it is
-not a security boundary: Pi retains the launching user's filesystem permissions.
+The bundled and tested configuration uses Pi's `llama-cpp` provider with a
+llama.cpp server. Set `LLAMA_URL` to its OpenAI-compatible API base URL and
+`PI_MODEL` to a model ID returned by the server's `/models` endpoint.
 
-The `game_test` extension drives a real browser and asks generated games for a
-action-transition-observation loop. Playwright MCP is also available.
-
-Cloudflare image generation is optional and remote. Export credentials in the shell used to launch the experiment. See Cloudflare's
-[Workers AI REST API setup](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).:
+A portable copy of the configuration used for the case study is
+[`examples/neon-breach/qwen3.8-27b-rtx5060ti.ini`](examples/neon-breach/qwen3.8-27b-rtx5060ti.ini).
+Replace the placeholder `model`, `spec-draft-model`, and `mmproj` paths, then run
+from the repository root:
 
 ```bash
-export CLOUDFLARE_ACCOUNT_ID="your-account-id"
-export CLOUDFLARE_API_TOKEN="your-api-token"
+llama serve \
+  --models-preset examples/neon-breach/qwen3.8-27b-rtx5060ti.ini \
+  --models-max 1 \
+  --host 127.0.0.1 \
+  --port 8080
 ```
 
-The `generate_image` tool uses FLUX.1 Schnell and requires [ImageMagick's](https://imagemagick.org/#gsc.tab=0)
-`magick` command. Leave these variables unset to run without remote image
-generation.
+The harness defaults match the preset section name and server address:
 
-[Context7](https://context7.com/) is optional documentation access enabled with `ENABLE_CONTEXT7=1` and
-`CONTEXT7_API_KEY`.
+```bash
+export PI_MODEL=qwen
+export LLAMA_URL=http://127.0.0.1:8080/v1
+export MODEL_PRESET=examples/neon-breach/qwen3.8-27b-rtx5060ti.ini
+```
+
+The case study paired an ASCII-condensed Qwen3.8-27B target with a DFlash2 draft
+on an RTX 5060 Ti. See the preset and the
+[case study notes](examples/neon-breach/README.md) for the full configuration.
+
+## Context and tools
+
+Pi runs with `--no-context-files`, `--no-skills`, and an isolated
+`PI_CODING_AGENT_DIR` to reduce accidental context contamination. This is not a
+security boundary: Pi retains the launching user's filesystem permissions.
+
+The `game_test` extension drives a real browser and asks generated games for an
+action-transition-observation loop. Playwright MCP is also available.
+
+Optional integrations:
+
+- Cloudflare image generation: export `CLOUDFLARE_ACCOUNT_ID` and
+  `CLOUDFLARE_API_TOKEN` in the shell used to launch the experiment. The
+  `generate_image` tool uses FLUX.1 Schnell and requires ImageMagick's `magick`
+  command. Leave the variables unset to run without remote image generation.
+- Context7 documentation access: set `ENABLE_CONTEXT7=1` and
+  `CONTEXT7_API_KEY`.
+
+## Contributing
+
+Open an issue for problems and ideas; pull requests are welcome.
+
+## License
+
+Apache 2.0 - see [LICENSE](LICENSE).

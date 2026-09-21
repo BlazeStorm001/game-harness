@@ -6,12 +6,14 @@ This is the preserved output of a nine-hour Qwen3.8-27B (3-bit quantized) evalua
 - [`scenario/`](scenario/) contains the supplied prompts and reference images.
 - [`artifacts.sha256`](artifacts.sha256) verifies every preserved game file.
 - [`traces.html`](traces.html) is the complete interactive Pi session export.
+- [`qwen3.8-27b-rtx5060ti.ini`](qwen3.8-27b-rtx5060ti.ini) is llama.cpp preset used.
 
 Run the game locally:
 
 ```bash
 cd examples/neon-breach/game
-python3 -m http.server 8123```
+python3 -m http.server 8123
+```
 
 Open <http://127.0.0.1:8123>
 

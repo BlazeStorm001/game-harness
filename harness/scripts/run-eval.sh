@@ -6,20 +6,26 @@ repo_root="$(cd -- "$harness_root/.." && pwd)"
 workspaces_root="$repo_root/.runs"
 
 hours=10
-hours_set=false
-scenario="neon-breach"
+minutes=""
+duration_set=false
+scenario=""
+resume=false
 resume_latest=false
+resume_target=""
 skip_preflight=false
 
 usage() {
   cat <<EOF
 Usage:
-  $0 [--scenario PATH_OR_NAME] [--hours N]
-  $0 --resume-latest [--hours N]
+  $0 --scenario PATH [--hours N | --minutes N]
+  $0 --resume RUN [--hours N | --minutes N]
+  $0 --resume-latest [--hours N | --minutes N]
 
 Options:
-  --scenario PATH_OR_NAME  Scenario directory or bundled scenario name
-  --hours N                Total runtime in hours (default: 10)
+  --scenario PATH          Scenario directory (required for a new run)
+  --hours N                Total runtime in hours, minimum 2 (default: 10)
+  --minutes N              Short smoke-run duration in minutes
+  --resume RUN             Continue the saved session in .runs/RUN
   --resume-latest          Continue the newest saved session
   --skip-preflight         Skip model text/vision smoke calls
 
@@ -29,6 +35,7 @@ Environment:
   PI_PROVIDER              Pi provider (default: llama-cpp)
   PI_MODEL                 Served model ID (default: qwen)
   LLAMA_URL                OpenAI-compatible base URL
+  MODEL_PRESET             Optional model-server preset file to hash
 EOF
 }
 
@@ -42,10 +49,28 @@ while (( $# > 0 )); do
     --hours)
       shift
       [[ $# -gt 0 ]] || { echo "--hours requires a value" >&2; exit 2; }
+      [[ "$duration_set" == false ]] || { echo "Specify only one duration option." >&2; exit 2; }
       hours="$1"
-      hours_set=true
+      duration_set=true
+      ;;
+    --minutes)
+      shift
+      [[ $# -gt 0 ]] || { echo "--minutes requires a value" >&2; exit 2; }
+      [[ "$duration_set" == false ]] || { echo "Specify only one duration option." >&2; exit 2; }
+      minutes="$1"
+      duration_set=true
+      ;;
+    --resume)
+      shift
+      [[ $# -gt 0 ]] || { echo "--resume requires a run name" >&2; exit 2; }
+      [[ "$resume" == false ]] || { echo "Specify only one resume option." >&2; exit 2; }
+      [[ "$1" != */* ]] || { echo "--resume expects a workspace name under .runs" >&2; exit 2; }
+      resume=true
+      resume_target="$1"
       ;;
     --resume-latest)
+      [[ "$resume" == false ]] || { echo "Specify only one resume option." >&2; exit 2; }
+      resume=true
       resume_latest=true
       ;;
     --skip-preflight)
@@ -56,9 +81,9 @@ while (( $# > 0 )); do
       exit 0
       ;;
     *)
-      if [[ "$1" =~ ^[0-9]+$ ]] && [[ "$hours_set" == false ]]; then
+      if [[ "$1" =~ ^[0-9]+$ ]] && [[ "$duration_set" == false ]]; then
         hours="$1"
-        hours_set=true
+        duration_set=true
       else
         echo "Unknown argument: $1" >&2
         usage >&2
@@ -69,10 +94,31 @@ while (( $# > 0 )); do
   shift
 done
 
-[[ "$hours" =~ ^[0-9]+$ ]] && (( hours >= 2 )) || {
-  echo "Use at least two hours." >&2
+if [[ -n "$minutes" ]]; then
+  [[ "$minutes" =~ ^[0-9]+$ ]] && (( minutes >= 2 )) || {
+    echo "Use at least two minutes for a smoke run." >&2
+    exit 2
+  }
+  total_minutes="$minutes"
+else
+  [[ "$hours" =~ ^[0-9]+$ ]] && (( hours >= 2 )) || {
+    echo "Use at least two hours, or use --minutes for a short smoke run." >&2
+    exit 2
+  }
+  total_minutes=$((hours * 60))
+fi
+if [[ "$resume" == false && -z "$scenario" ]]; then
+  echo "--scenario PATH is required for a new run." >&2
+  usage >&2
   exit 2
-}
+fi
+if [[ "$resume" == false ]]; then
+  [[ -d "$scenario" ]] || {
+    echo "Scenario directory not found: $scenario" >&2
+    exit 2
+  }
+  scenario="$(realpath "$scenario")"
+fi
 
 turn_minutes="${TURN_MINUTES:-75}"
 final_minutes="${FINAL_MINUTES:-60}"
@@ -80,7 +126,7 @@ final_minutes="${FINAL_MINUTES:-60}"
   echo "TURN_MINUTES and FINAL_MINUTES must be whole numbers." >&2
   exit 2
 }
-(( final_minutes < hours * 60 )) || {
+(( final_minutes < total_minutes )) || {
   echo "FINAL_MINUTES must be shorter than the total run." >&2
   exit 2
 }
@@ -92,6 +138,16 @@ model="${PI_MODEL:-qwen}"
 url="${LLAMA_URL:-http://127.0.0.1:8080/v1}"
 url="${url%/}"
 pi_bin="$harness_root/node_modules/.bin/pi"
+model_preset="${MODEL_PRESET:-}"
+preset_hash=""
+if [[ -n "$model_preset" ]]; then
+  [[ -f "$model_preset" ]] || {
+    echo "MODEL_PRESET does not exist: $model_preset" >&2
+    exit 1
+  }
+  model_preset="$(realpath "$model_preset")"
+  preset_hash="$(sha256sum "$model_preset" | cut -d' ' -f1)"
+fi
 
 check_model() {
   local models_json
@@ -108,21 +164,24 @@ check_model() {
 
 check_model
 
-if [[ "$resume_latest" == true ]]; then
-  latest_session_file=""
+if [[ "$resume" == true ]]; then
   [[ -d "$workspaces_root" ]] || {
     echo "No evaluation workspace directory found: $workspaces_root" >&2
     exit 1
   }
-  latest_session_file="$(
-    find "$workspaces_root" -mindepth 1 -type f -name '*.jsonl' \
-      -path '*/.harness/pi-sessions/*' -printf '%T@ %p\n' 2>/dev/null |
-      sort -nr | head -1 | cut -d' ' -f2-
-  )"
-  [[ -n "$latest_session_file" ]] && \
-    workspace="${latest_session_file%%/.harness/pi-sessions/*}"
+  if [[ -n "$resume_target" ]]; then
+    workspace="$workspaces_root/$resume_target"
+  else
+    latest_session_file="$(
+      find "$workspaces_root" -mindepth 1 -type f -name '*.jsonl' \
+        -path '*/.harness/pi-sessions/*' -printf '%T@ %p\n' 2>/dev/null |
+        sort -nr | head -1 | cut -d' ' -f2-
+    )"
+    [[ -n "$latest_session_file" ]] && \
+      workspace="${latest_session_file%%/.harness/pi-sessions/*}"
+  fi
   [[ -n "${workspace:-}" && -d "$workspace/.harness/pi-sessions" ]] || {
-    echo "No evaluation workspace with saved sessions was found." >&2
+    echo "No evaluation workspace with saved sessions was found: ${resume_target:-latest}" >&2
     exit 1
   }
   workspace="$(realpath "$workspace")"
@@ -146,7 +205,7 @@ mkdir -p eval-logs .harness/pi-sessions
 
 start_epoch="$(date +%s)"
 started_at="$(date --iso-8601=seconds)"
-deadline=$((start_epoch + hours * 3600))
+deadline=$((start_epoch + total_minutes * 60))
 final_start=$((deadline - final_minutes * 60))
 run_id="$(date +%Y%m%d-%H%M%S)"
 turn=0
@@ -154,7 +213,7 @@ failures=0
 context_failures=0
 stop_reason="completed"
 
-if [[ "$resume_latest" == true ]]; then
+if [[ "$resume" == true ]]; then
   latest_session_file="$(
     find .harness/pi-sessions -mindepth 2 -maxdepth 2 -type f -name '*.jsonl' \
       -printf '%T@ %p\n' |
@@ -177,11 +236,7 @@ if [[ "$resume_latest" == true ]]; then
 else
   session_dir=".harness/pi-sessions/$run_id"
   mkdir -p "$session_dir"
-  if [[ -d "$scenario" ]]; then
-    scenario_root="$(realpath "$scenario")"
-  else
-    scenario_root="$harness_root/scenarios/$scenario"
-  fi
+  scenario_root="$(realpath "$scenario")"
   scenario_name="$(basename "$scenario_root")"
 fi
 
@@ -194,8 +249,6 @@ input_hashes="$(
   jq -Rn '[inputs | select(length > 0) |
     capture("^(?<sha256>[0-9a-f]{64})  (?<file>.*)$")]' < .harness/inputs.sha256
 )"
-
-hash_file() { sha256sum "$1" | cut -d' ' -f1; }
 
 metadata="eval-logs/$run_id-run.json"
 jq -n \
@@ -211,20 +264,23 @@ jq -n \
   --arg playwrightVersion "$(node -p "require('$harness_root/node_modules/@playwright/test/package.json').version")" \
   --arg piLlamaCommit "$(git -C "$harness_root/.runtime/pi-agent/git/github.com/huggingface/pi-llama" rev-parse HEAD)" \
   --arg piMcpVersion "$(jq -r '.version' "$harness_root/.runtime/pi-agent/npm/node_modules/pi-mcp-extension/package.json")" \
-  --arg presetHash "$(hash_file "$harness_root/presets/qwen3.8-27b-rtx5060ti.ini")" \
+  --arg presetPath "$model_preset" \
+  --arg presetHash "$preset_hash" \
   --argjson inputs "$input_hashes" \
-  --argjson resumed "$resume_latest" \
-  --argjson requestedHours "$hours" \
+  --argjson resumed "$resume" \
+  --argjson requestedMinutes "$total_minutes" \
   --argjson turnMinutes "$turn_minutes" \
   --argjson finalMinutes "$final_minutes" \
   '{schemaVersion: 1, runId: $runId, startedAt: $startedAt,
-    workspace: $workspace, resumed: $resumed, requestedHours: $requestedHours,
+    workspace: $workspace, resumed: $resumed,
+    requestedHours: ($requestedMinutes / 60), requestedMinutes: $requestedMinutes,
     turnMinutes: $turnMinutes, finalMinutes: $finalMinutes, provider: $provider,
     model: $model, endpoint: $endpoint, sessionDirectory: $sessionDirectory,
     scenario: {name: $scenarioName, inputs: $inputs},
     versions: {pi: $piVersion, playwright: $playwrightVersion,
       piLlamaCommit: $piLlamaCommit, piMcpExtension: $piMcpVersion},
-    hashes: {preset: $presetHash}, turns: []}' > "$metadata"
+    modelPreset: (if $presetPath == "" then null else
+      {path: $presetPath, sha256: $presetHash} end), turns: []}' > "$metadata"
 
 session_id() {
   local file
@@ -326,7 +382,7 @@ run_prompt() {
 echo "Workspace: $workspace"
 echo "Session:   $session_dir"
 
-if [[ "$resume_latest" == false ]]; then
+if [[ "$resume" == false ]]; then
   run_prompt prompts/initial.txt "$((turn_minutes * 60))" initial true || {
     status=$?
     [[ $status -eq 124 || $status -eq 130 ]] || failures=1

@@ -3,10 +3,10 @@ set -Eeuo pipefail
 
 harness_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_root="$(cd -- "$harness_root/.." && pwd)"
-scenario="neon-breach"
+scenario=""
 
 usage() {
-  echo "Usage: $0 [--scenario PATH_OR_NAME]" >&2
+  echo "Usage: $0 --scenario PATH" >&2
 }
 
 while (( $# > 0 )); do
@@ -27,6 +27,8 @@ while (( $# > 0 )); do
   esac
   shift
 done
+
+[[ -n "$scenario" ]] || { usage; exit 2; }
 
 "$harness_root/scripts/setup.sh" --check >/dev/null
 
@@ -87,26 +89,46 @@ common=(
   -p
 )
 
-timeout 240 "$pi_bin" "${common[@]}" \
-  'Reply exactly: PI_OK. Do not use tools.' > .harness/pi-preflight.txt
-rg -Fx 'PI_OK' .harness/pi-preflight.txt >/dev/null
+report_failure() {
+  local message="$1"
+  local output_file="$2"
+  echo "$message" >&2
+  if [[ -s "$output_file" ]]; then
+    echo "Captured output:" >&2
+    cat -- "$output_file" >&2
+  fi
+  exit 1
+}
 
-timeout 240 "$pi_bin" "${common[@]}" \
+text_output=.harness/pi-preflight.txt
+if ! timeout 240 "$pi_bin" "${common[@]}" \
+  'Reply exactly: PI_OK. Do not use tools.' > "$text_output"; then
+  report_failure "Pi failed during the text preflight." "$text_output"
+fi
+rg -Fx 'PI_OK' "$text_output" >/dev/null || \
+  report_failure "The model did not return the expected text preflight response." "$text_output"
+
+vision_output=.harness/pi-vision-preflight.txt
+if ! timeout 240 "$pi_bin" "${common[@]}" \
   @.harness/pi-vision-preflight.png \
   'Read the large text in this image. Reply with only that text.' \
-  > .harness/pi-vision-preflight.txt
-rg -Fx 'VISION_OK_7319' .harness/pi-vision-preflight.txt >/dev/null
+  > "$vision_output"; then
+  report_failure "Pi failed during the vision preflight." "$vision_output"
+fi
+rg -Fx 'VISION_OK_7319' "$vision_output" >/dev/null || \
+  report_failure "The model did not return the expected vision preflight response." "$vision_output"
 
-timeout 240 "$pi_bin" "${common[@]}" \
+tool_output=.harness/pi-tool-preflight.jsonl
+if ! timeout 240 "$pi_bin" "${common[@]}" \
   --mode json \
   --tools game_test \
   'Call game_test exactly once with operation "close". Do not answer before calling the tool.' \
-  > .harness/pi-tool-preflight.jsonl
+  > "$tool_output"; then
+  report_failure "Pi failed during the game_test tool-call preflight." "$tool_output"
+fi
 jq -e \
   'select(.type == "tool_execution_end" and .toolName == "game_test" and .isError == false)' \
-  .harness/pi-tool-preflight.jsonl >/dev/null || {
-    echo "The model did not complete the game_test tool-call preflight." >&2
-    exit 1
-  }
+  "$tool_output" >/dev/null || \
+  report_failure "The model did not complete the game_test tool-call preflight." "$tool_output"
 
 echo "Preflight passed: model, Pi, game_test, vision, and browser."
