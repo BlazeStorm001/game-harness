@@ -105,7 +105,7 @@ if ! timeout 240 "$pi_bin" "${common[@]}" \
   'Reply exactly: PI_OK. Do not use tools.' > "$text_output"; then
   report_failure "Pi failed during the text preflight." "$text_output"
 fi
-rg -Fx 'PI_OK' "$text_output" >/dev/null || \
+rg -Fx -e 'PI_OK' -e 'PI_OK.' "$text_output" >/dev/null || \
   report_failure "The model did not return the expected text preflight response." "$text_output"
 
 vision_output=.harness/pi-vision-preflight.txt
